@@ -13,3 +13,4 @@ tenacity==9.1.2
 transformers==4.57.1 # 本地加载嵌入模型依赖
 sentence-transformers==5.1.2  # 本地加载嵌入模型依赖
 torch==2.9.0  # 本地加载嵌入模型依赖
+rank-bm25==0.2.2  # BM25关键词检索依赖

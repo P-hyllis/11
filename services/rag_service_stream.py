@@ -7,7 +7,9 @@ from typing import Dict, Optional, Any, Generator
 from chromadb import Settings
 from langchain.text_splitter import RecursiveCharacterTextSplitter
 from langchain_community.document_loaders import TextLoader, PyPDFLoader, Docx2txtLoader
+from langchain_community.retrievers import BM25Retriever
 from langchain_chroma import Chroma
+from langchain_core.documents import Document
 
 from langchain.memory import ConversationBufferWindowMemory
 from langchain.schema import HumanMessage
@@ -37,6 +39,8 @@ class RAGService:
     def __init__(self,
                  persist_directory: str = "chroma_db",
                  retrieve_k: int = 8,  # 检索 top-k 个相关文本块
+                 enable_bm25: bool = False,  # 是否开启BM25关键词检索
+                 bm25_k: int = 8,  # BM25召回数量
                  enable_reranker: bool = True,  # 是否开启重排
                  enable_concept_expansion: bool = False,  # 是否开启概念抽取增强检索
                  concept_count: int = 3,  # 概念抽取个数
@@ -64,8 +68,13 @@ class RAGService:
         self.embeddings = initialize_embedding_model("qwen")
         # 检索 top-k 个相关文本块
         self.retrieve_k = retrieve_k
+        # 是否开启BM25混合检索
+        self.enable_bm25 = enable_bm25
+        # BM25召回数量
+        self.bm25_k = bm25_k
         # 初始化向量数据库（若存在）
         self.vectordb = self._load_vector_db()
+        self.bm25_retriever = None
         # 初始化大语言模型（用于生成答案）
         self.llm = langchain_qwen_llm()
         # 是否开启重排
@@ -216,6 +225,9 @@ class RAGService:
                     persist_directory=self.persist_directory  # 指定存储路径
                 )
 
+            # 文档变化后让BM25索引重建
+            self.bm25_retriever = None
+
             return {
                 "success": True,
                 "message": f"文档处理成功！共添加 {len(splits)} 个文本片段（文件：{file_name}）"
@@ -262,10 +274,76 @@ class RAGService:
             return []
 
     def _retrieve_docs(self, query: str) -> list:
-        """统一检索入口，支持配置检索数量。"""
+        """统一检索入口，支持向量检索 + BM25混合检索。"""
         retriever = self.vectordb.as_retriever(search_kwargs={"k": self.retrieve_k})
-        docs = retriever.invoke(query)
-        return docs
+        dense_docs = retriever.invoke(query)
+
+        if not self.enable_bm25:
+            return dense_docs
+
+        bm25_docs = self._retrieve_docs_bm25(query)
+        return self._reciprocal_rank_fusion(dense_docs, bm25_docs)
+
+    def _retrieve_docs_bm25(self, query: str) -> list:
+        """BM25关键词检索。"""
+        if not self.bm25_retriever:
+            self._build_bm25_retriever()
+        if not self.bm25_retriever:
+            return []
+
+        self.bm25_retriever.k = self.bm25_k
+        return self.bm25_retriever.invoke(query)
+
+    def _build_bm25_retriever(self) -> None:
+        """从向量库中加载全部文档并构建BM25检索器。"""
+        try:
+            raw = self.vectordb.get(include=["documents", "metadatas"])
+            documents = raw.get("documents", []) or []
+            metadatas = raw.get("metadatas", []) or []
+            if not documents:
+                self.bm25_retriever = None
+                return
+
+            docs = []
+            for idx, text in enumerate(documents):
+                if not text:
+                    continue
+                metadata = metadatas[idx] if idx < len(metadatas) and metadatas[idx] else {}
+                docs.append(Document(page_content=text, metadata=metadata))
+
+            if docs:
+                self.bm25_retriever = BM25Retriever.from_documents(docs)
+                self.bm25_retriever.k = self.bm25_k
+        except Exception as e:
+            logger.warning(f"BM25检索器构建失败，降级为向量检索：{str(e)}")
+            self.bm25_retriever = None
+
+    @staticmethod
+    def _reciprocal_rank_fusion(dense_docs: list, bm25_docs: list, rrf_k: int = 60) -> list:
+        """RRF融合向量检索与BM25结果。"""
+        if not bm25_docs:
+            return dense_docs
+
+        scores = {}
+        doc_map = {}
+
+        for rank, doc in enumerate(dense_docs, start=1):
+            key = doc.page_content.strip()
+            if not key:
+                continue
+            scores[key] = scores.get(key, 0.0) + 1.0 / (rrf_k + rank)
+            doc_map[key] = doc
+
+        for rank, doc in enumerate(bm25_docs, start=1):
+            key = doc.page_content.strip()
+            if not key:
+                continue
+            scores[key] = scores.get(key, 0.0) + 1.0 / (rrf_k + rank)
+            if key not in doc_map:
+                doc_map[key] = doc
+
+        merged = sorted(scores.items(), key=lambda x: x[1], reverse=True)
+        return [doc_map[key] for key, _ in merged[:max(len(dense_docs), len(bm25_docs))]]
 
     def _apply_rerank(self, query: str, docs: list) -> list:
         """统一重排入口。"""
@@ -467,6 +545,7 @@ class RAGService:
                 # self.vectordb.delete_collection()
                 # self.vectordb = None
                 self.vectordb.reset_collection()
+                self.bm25_retriever = None
 
             # 清除记忆
             self.memory.clear()
