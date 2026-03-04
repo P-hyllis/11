@@ -209,10 +209,6 @@ def initialize_app():
     # 初始化RAG配置参数
     if "retrieve_k" not in st.session_state:
         st.session_state.retrieve_k = 6  # 默认检索文档数量
-    if "enable_bm25" not in st.session_state:
-        st.session_state.enable_bm25 = False  # 默认关闭BM25
-    if "bm25_k" not in st.session_state:
-        st.session_state.bm25_k = 6  # BM25召回数量
     if "enable_reranker" not in st.session_state:
         st.session_state.enable_reranker = False  # 默认开启重排
     if "rerank_top_n" not in st.session_state:
@@ -228,8 +224,6 @@ def initialize_app():
     if "rag_service" not in st.session_state:
         st.session_state.rag_service = RAGService(
             retrieve_k=st.session_state.retrieve_k,
-            enable_bm25=st.session_state.enable_bm25,
-            bm25_k=st.session_state.bm25_k,
             enable_reranker=st.session_state.enable_reranker,
             enable_concept_expansion=st.session_state.enable_concept_expansion,
             concept_count=st.session_state.concept_count,
@@ -259,18 +253,6 @@ with st.sidebar:
         "初始检索文档数量 (retrieve_k)",
         min_value=1, max_value=10, value=st.session_state.retrieve_k, step=1,
         help="从向量库中初始检索的文档数量，数量越多覆盖范围越广，但可能引入噪音"
-    )
-
-    enable_bm25 = st.toggle(
-        "开启BM25关键词检索（混合召回）",
-        value=st.session_state.enable_bm25,
-        help="开启后会把BM25与向量检索结果进行融合，提高关键词场景召回能力"
-    )
-    bm25_k = st.slider(
-        "BM25召回数量 (bm25_k)",
-        min_value=1, max_value=15, value=st.session_state.bm25_k, step=1,
-        disabled=not enable_bm25,
-        help="BM25关键词检索的召回文档数量"
     )
 
     # 2. 重排功能开关
@@ -321,8 +303,6 @@ with st.sidebar:
         # 更新会话状态
         st.session_state.enable_reranker = enable_reranker
         st.session_state.retrieve_k = retrieve_k
-        st.session_state.enable_bm25 = enable_bm25
-        st.session_state.bm25_k = bm25_k
         st.session_state.rerank_top_n = rerank_top_n
         st.session_state.enable_concept_expansion = enable_concept_expansion
         st.session_state.concept_count = concept_count
@@ -331,8 +311,6 @@ with st.sidebar:
         # 更新RAGService的配置
         st.session_state.rag_service.enable_reranker = enable_reranker
         st.session_state.rag_service.retrieve_k = retrieve_k
-        st.session_state.rag_service.enable_bm25 = enable_bm25
-        st.session_state.rag_service.bm25_k = bm25_k
         st.session_state.rag_service.rerank_top_n = rerank_top_n
         st.session_state.rag_service.enable_concept_expansion = enable_concept_expansion
         st.session_state.rag_service.concept_count = concept_count
