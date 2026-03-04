@@ -27,18 +27,24 @@ st.set_page_config(
     layout="wide"
 )
 
-# ===== UI 美化：蓝色主题 + 卡片化侧边栏 + 更圆润的框 =====
+# ===== UI 美化：蓝色渐变主题 + 卡片化布局 + 更清晰的信息层级 =====
 st.markdown(
     """
 <style>
 /* 全局字体与背景微调 */
 html, body, [class*="css"]  { font-family: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Arial; }
+body {
+  background:
+    radial-gradient(1200px 600px at 20% -20%, rgba(37,99,235,0.10), transparent 60%),
+    radial-gradient(1200px 600px at 120% 0%, rgba(59,130,246,0.10), transparent 60%),
+    #F8FAFF;
+}
 
 /* 主色：蓝 */
 :root {
   --brand: #2563EB;         /* 蓝色主色 */
   --brand-2: #1D4ED8;
-  --bg-soft: #F5F7FF;
+  --bg-soft: #F3F6FF;
   --border: rgba(15, 23, 42, 0.12);
   --shadow: 0 10px 30px rgba(2, 6, 23, 0.08);
   --radius: 16px;
@@ -51,6 +57,36 @@ html, body, [class*="css"]  { font-family: ui-sans-serif, system-ui, -apple-syst
 h1, h2, h3 { letter-spacing: -0.02em; }
 h1 { font-size: 1.6rem; }
 
+/* 顶部说明卡片 */
+.hero-card {
+  background: linear-gradient(135deg, rgba(37,99,235,0.12), rgba(29,78,216,0.06));
+  border: 1px solid rgba(37,99,235,0.22);
+  border-radius: calc(var(--radius) + 2px);
+  padding: 16px 18px;
+  margin-bottom: 12px;
+  box-shadow: var(--shadow);
+}
+.hero-title {
+  font-size: 1.18rem;
+  font-weight: 700;
+  color: #0F172A;
+  margin-bottom: 6px;
+}
+.hero-subtitle {
+  color: #334155;
+  font-size: 0.93rem;
+  margin-bottom: 10px;
+}
+.chip-row { display: flex; gap: 8px; flex-wrap: wrap; }
+.chip {
+  font-size: 0.78rem;
+  color: #1E3A8A;
+  background: rgba(255,255,255,0.72);
+  border: 1px solid rgba(37,99,235,0.25);
+  border-radius: 999px;
+  padding: 4px 10px;
+}
+
 /* 侧边栏整体背景 */
 section[data-testid="stSidebar"] > div {
   background: linear-gradient(180deg, #FFFFFF 0%, var(--bg-soft) 100%);
@@ -58,12 +94,19 @@ section[data-testid="stSidebar"] > div {
 
 /* 侧边栏卡片容器：我们用 st.container 包起来时会更明显 */
 .sidebar-card {
-  background: rgba(255,255,255,0.85);
+  background: rgba(255,255,255,0.92);
   border: 1px solid var(--border);
   border-radius: var(--radius);
-  padding: 14px 14px 10px 14px;
-  box-shadow: 0 6px 18px rgba(2, 6, 23, 0.06);
+  padding: 14px 14px 12px 14px;
+  box-shadow: 0 8px 22px rgba(2, 6, 23, 0.07);
   margin-bottom: 12px;
+}
+
+.section-title {
+  font-size: 0.92rem;
+  font-weight: 700;
+  color: #1E293B;
+  margin-bottom: 8px;
 }
 
 /* 按钮：圆角、蓝色、阴影 */
@@ -105,6 +148,11 @@ div[data-testid="stChatMessage"] {
   box-shadow: 0 6px 14px rgba(2, 6, 23, 0.05);
   padding: 10px 12px;
   margin-bottom: 10px;
+}
+
+/* 用户/助手消息颜色微区分 */
+div[data-testid="stChatMessage"][data-testid*="user"] {
+  background: rgba(255,255,255,0.96);
 }
 </style>
     """,
@@ -157,10 +205,10 @@ initialize_app()
 # 定义侧边栏区域
 with st.sidebar:
     st.subheader("RAG知识问答")
-    # st.subheader("RAG知识问答助手")
+    st.caption("配置你的检索、重排与查询增强策略")
 
     st.markdown('<div class="sidebar-card">', unsafe_allow_html=True)
-    st.caption("检索配置")
+    st.markdown('<div class="section-title">检索与重排配置</div>', unsafe_allow_html=True)
 
     # RAG检索配置区域
     # 1. 检索数量控制
@@ -190,9 +238,10 @@ with st.sidebar:
         rerank_top_n = retrieve_k
         st.warning(f"重排保留数量自动调整为 {retrieve_k}（不超过初始检索数量）")
 
-    # 4. 应用配置按钮
-    st.divider()
-    st.caption("查询增强配置")
+    st.markdown('</div>', unsafe_allow_html=True)
+
+    st.markdown('<div class="sidebar-card">', unsafe_allow_html=True)
+    st.markdown('<div class="section-title">查询增强配置</div>', unsafe_allow_html=True)
     enable_concept_expansion = st.toggle(
         "开启概念抽取增强检索",
         value=st.session_state.enable_concept_expansion,
@@ -211,7 +260,8 @@ with st.sidebar:
         help="开启后将分别生成两份答案，并由LLM自动选择更优答案输出"
     )
 
-    # 5. 应用配置按钮
+    st.markdown('</div>', unsafe_allow_html=True)
+
     if st.button("应用配置", use_container_width=True, type="primary"):
         # 更新会话状态
         st.session_state.enable_reranker = enable_reranker
@@ -231,8 +281,8 @@ with st.sidebar:
 
         st.success("配置已更新生效！")
 
-    # 文档管理区域
-    st.divider()  # 添加分隔线
+    st.markdown('<div class="sidebar-card">', unsafe_allow_html=True)
+    st.markdown('<div class="section-title">文档管理</div>', unsafe_allow_html=True)
     # 1. 多文件上传（支持PDF/DOCX/TXT/MD，与RAGService支持的格式一致）
     uploaded_files = st.file_uploader(
         "上传文档 (PDF/DOCX/txt/md)",
@@ -256,10 +306,23 @@ with st.sidebar:
             # 清空聊天历史
             st.session_state.history = []
             st.success("知识库已成功清空")
+    st.markdown('</div>', unsafe_allow_html=True)
 
 # 主界面 - 聊天区域
-# st.header("从0开始：用 Streamlit + LangChain搭建一个简单基于RAG问答聊天助手")
-st.header("面向课程学习的智能问答系统")
+st.markdown(
+    f"""
+<div class="hero-card">
+  <div class="hero-title">面向课程学习的智能问答系统</div>
+  <div class="hero-subtitle">基于检索增强生成（RAG），支持流式回答、结果重排与概念增强检索。</div>
+  <div class="chip-row">
+    <span class="chip">初始检索: {st.session_state.retrieve_k}</span>
+    <span class="chip">重排: {'开启' if st.session_state.enable_reranker else '关闭'}</span>
+    <span class="chip">概念增强: {'开启' if st.session_state.enable_concept_expansion else '关闭'}</span>
+  </div>
+</div>
+""",
+    unsafe_allow_html=True,
+)
 
 # 1. 展示聊天历史（遍历session_state.history，按角色显示消息）
 for message in st.session_state.history:
