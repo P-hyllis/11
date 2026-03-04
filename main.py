@@ -80,16 +80,29 @@ section[data-testid="stSidebar"] {
 .hero-subtitle {
   color: #374151;
   font-size: 0.93rem;
-  margin-bottom: 10px;
+  margin-bottom: 0;
 }
-.chip-row { display: flex; gap: 8px; flex-wrap: wrap; }
-.chip {
-  font-size: 0.78rem;
-  color: #1D4ED8;
-  background: #EFF6FF;
-  border: 1px solid #BFDBFE;
-  border-radius: 999px;
-  padding: 4px 10px;
+
+.guide-card {
+  background: #FFFFFF;
+  border: 1px solid #E5E7EB;
+  border-radius: 12px;
+  padding: 14px 16px;
+  box-shadow: var(--shadow);
+  margin-bottom: 12px;
+}
+.guide-title {
+  color: #1F2937;
+  font-size: 0.92rem;
+  font-weight: 700;
+  margin-bottom: 8px;
+}
+.guide-list {
+  margin: 0;
+  padding-left: 18px;
+  color: #374151;
+  font-size: 0.88rem;
+  line-height: 1.55;
 }
 
 /* 侧边栏整体背景 */
@@ -336,17 +349,27 @@ with st.sidebar:
 st.markdown(
     f"""
 <div class="hero-card">
-  <div class="hero-title">面向课程学习的智能问答系统</div>
-  <div class="hero-subtitle">基于检索增强生成（RAG），支持流式回答、结果重排与概念增强检索。</div>
-  <div class="chip-row">
-    <span class="chip">初始检索: {st.session_state.retrieve_k}</span>
-    <span class="chip">重排: {'开启' if st.session_state.enable_reranker else '关闭'}</span>
-    <span class="chip">概念增强: {'开启' if st.session_state.enable_concept_expansion else '关闭'}</span>
-  </div>
+  <div class="hero-title">课程智能问答助手</div>
+  <div class="hero-subtitle">上传资料后即可进行知识问答，系统支持检索增强、重排与查询增强策略。</div>
 </div>
 """,
     unsafe_allow_html=True,
 )
+
+if not st.session_state.history:
+    st.markdown(
+        """
+<div class="guide-card">
+  <div class="guide-title">欢迎使用 👋 你可以试试这些问题：</div>
+  <ul class="guide-list">
+    <li>请总结这份资料的核心内容。</li>
+    <li>这份制度里关于请假和考勤有哪些关键规则？</li>
+    <li>根据文档，帮我整理一个考试复习提纲。</li>
+  </ul>
+</div>
+""",
+        unsafe_allow_html=True,
+    )
 
 # 1. 展示聊天历史（遍历session_state.history，按角色显示消息）
 for message in st.session_state.history:
