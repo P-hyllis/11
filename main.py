@@ -128,12 +128,21 @@ def initialize_app():
         st.session_state.enable_reranker = False  # 默认开启重排
     if "rerank_top_n" not in st.session_state:
         st.session_state.rerank_top_n = 5  # 重排后保留文档数量
+    if "enable_concept_expansion" not in st.session_state:
+        st.session_state.enable_concept_expansion = False  # 默认关闭概念抽取增强检索
+    if "concept_count" not in st.session_state:
+        st.session_state.concept_count = 3  # 默认抽取概念数量
+    if "compare_with_raw_query" not in st.session_state:
+        st.session_state.compare_with_raw_query = False  # 默认关闭双路择优
 
     # 初始化RAG核心服务（封装了文档处理、向量存储、流式问答的核心逻辑）
     if "rag_service" not in st.session_state:
         st.session_state.rag_service = RAGService(
             retrieve_k=st.session_state.retrieve_k,
             enable_reranker=st.session_state.enable_reranker,
+            enable_concept_expansion=st.session_state.enable_concept_expansion,
+            concept_count=st.session_state.concept_count,
+            compare_with_raw_query=st.session_state.compare_with_raw_query,
             rerank_top_n=st.session_state.rerank_top_n,
             # 重排模型配置：用于对检索结果进行语义重排序.默认使用BAAI的bge-reranker-v2-m3（中文效果性价比较高）。
             # 这里加载本地路径模型（需手动下载模型文件到指定路径）
@@ -182,16 +191,43 @@ with st.sidebar:
         st.warning(f"重排保留数量自动调整为 {retrieve_k}（不超过初始检索数量）")
 
     # 4. 应用配置按钮
+    st.divider()
+    st.caption("查询增强配置")
+    enable_concept_expansion = st.toggle(
+        "开启概念抽取增强检索",
+        value=st.session_state.enable_concept_expansion,
+        help="先用LLM抽取查询中的关键概念，再与原查询联合检索，提高召回覆盖"
+    )
+    concept_count = st.slider(
+        "概念抽取数量",
+        min_value=1, max_value=8, value=st.session_state.concept_count, step=1,
+        disabled=not enable_concept_expansion,
+        help="控制LLM从问题中抽取的概念个数"
+    )
+    compare_with_raw_query = st.toggle(
+        "双路对比择优（有概念 vs 无概念）",
+        value=st.session_state.compare_with_raw_query,
+        disabled=not enable_concept_expansion,
+        help="开启后将分别生成两份答案，并由LLM自动选择更优答案输出"
+    )
+
+    # 5. 应用配置按钮
     if st.button("应用配置", use_container_width=True, type="primary"):
         # 更新会话状态
         st.session_state.enable_reranker = enable_reranker
         st.session_state.retrieve_k = retrieve_k
         st.session_state.rerank_top_n = rerank_top_n
+        st.session_state.enable_concept_expansion = enable_concept_expansion
+        st.session_state.concept_count = concept_count
+        st.session_state.compare_with_raw_query = compare_with_raw_query
 
         # 更新RAGService的配置
         st.session_state.rag_service.enable_reranker = enable_reranker
         st.session_state.rag_service.retrieve_k = retrieve_k
         st.session_state.rag_service.rerank_top_n = rerank_top_n
+        st.session_state.rag_service.enable_concept_expansion = enable_concept_expansion
+        st.session_state.rag_service.concept_count = concept_count
+        st.session_state.rag_service.compare_with_raw_query = compare_with_raw_query
 
         st.success("配置已更新生效！")
 

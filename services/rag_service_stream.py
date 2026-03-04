@@ -10,7 +10,6 @@ from langchain_chroma import Chroma
 
 from langchain.memory import ConversationBufferWindowMemory
 from langchain.schema import HumanMessage
-from sentence_transformers import CrossEncoder
 
 from models.langchain_embedding import initialize_embedding_model
 from models.langchain_llm import langchain_qwen_llm
@@ -38,6 +37,9 @@ class RAGService:
                  persist_directory: str = "chroma_db",
                  retrieve_k: int = 8,  # 检索 top-k 个相关文本块
                  enable_reranker: bool = True,  # 是否开启重排
+                 enable_concept_expansion: bool = False,  # 是否开启概念抽取增强检索
+                 concept_count: int = 3,  # 概念抽取个数
+                 compare_with_raw_query: bool = False,  # 是否执行“原查询 vs 概念增强查询”双路对比
                  model_name_or_path: str = "BAAI/bge-reranker-large",  # 重排模型名称（HuggingFace Hub规范名）或本地存储路径
                  rerank_top_n: int = 4,  # 重排后保留数量,必须小于retrieve_k
                  rerank_score_threshold: float = 0.1  # 重排分数阈值，大于该阈值才被选取
@@ -60,13 +62,19 @@ class RAGService:
         # 初始化嵌入模型（用于将文本转换为向量）
         self.embeddings = initialize_embedding_model("qwen")
         # 检索 top-k 个相关文本块
-        self.retrieve_k = retrieve_k,
+        self.retrieve_k = retrieve_k
         # 初始化向量数据库（若存在）
         self.vectordb = self._load_vector_db()
         # 初始化大语言模型（用于生成答案）
         self.llm = langchain_qwen_llm()
         # 是否开启重排
         self.enable_reranker = enable_reranker
+        # 是否开启概念抽取增强检索
+        self.enable_concept_expansion = enable_concept_expansion
+        # 概念抽取数量
+        self.concept_count = concept_count
+        # 是否双路对比
+        self.compare_with_raw_query = compare_with_raw_query
         # 初始化重排模型
         self.reranker_model = self._init_rerank_model(model_name_or_path)
         # 重排后保留数量,必须小于k
@@ -222,6 +230,123 @@ class RAGService:
                 except Exception as e:
                     logger.error(f"警告：临时文件清理失败（路径：{tmp_file_path}）：{str(e)}")
 
+    def _extract_concepts(self, question: str) -> list[str]:
+        """通过LLM从问题中抽取关键概念（数量可配置）。"""
+        prompt = f"""
+你是一个概念抽取器。
+请从用户问题中抽取最关键的 {self.concept_count} 个检索概念，要求：
+1. 仅返回概念，不要解释
+2. 优先返回名词或短语
+3. 每行一个概念
+4. 概念数量不超过 {self.concept_count}
+
+用户问题：{question}
+"""
+        try:
+            resp = self.llm.invoke(prompt)
+            raw_text = (resp.content or "").strip()
+            if not raw_text:
+                return []
+
+            concepts = []
+            for line in raw_text.splitlines():
+                item = line.strip().lstrip("-•0123456789. ").strip()
+                if item and item not in concepts:
+                    concepts.append(item)
+                if len(concepts) >= self.concept_count:
+                    break
+            return concepts
+        except Exception as e:
+            logger.warning(f"概念抽取失败，将退化为原始检索：{str(e)}")
+            return []
+
+    def _retrieve_docs(self, query: str) -> list:
+        """统一检索入口，支持配置检索数量。"""
+        retriever = self.vectordb.as_retriever(search_kwargs={"k": self.retrieve_k})
+        docs = retriever.invoke(query)
+        return docs
+
+    def _apply_rerank(self, query: str, docs: list) -> list:
+        """统一重排入口。"""
+        relevant_docs = docs
+        if self.reranker_model and self.enable_reranker:
+            filters_docs = self.reranker_model.rerank_documents(
+                query=query,
+                documents=relevant_docs,
+                top_n=self.rerank_top_n,
+                score_threshold=self.rerank_score_threshold
+            )
+            if filters_docs:
+                relevant_docs = filters_docs
+                logger.info(f"重排后提取 {len(relevant_docs)} 个相关文本块")
+            else:
+                relevant_docs = relevant_docs[:self.rerank_top_n]
+                logger.info(f"重排后未筛选到文档，提取检索的 {len(relevant_docs)} 个相关文本块")
+        return relevant_docs
+
+    @staticmethod
+    def _dedup_docs(docs: list) -> list:
+        """按文档内容去重，避免上下文重复。"""
+        seen = set()
+        unique_docs = []
+        for doc in docs:
+            key = doc.page_content.strip()
+            if key and key not in seen:
+                seen.add(key)
+                unique_docs.append(doc)
+        return unique_docs
+
+    def _build_prompt(self, question: str, docs: list) -> str:
+        """构造问答提示词。"""
+        context_text = "\n\n".join([doc.page_content for doc in docs])
+        system_prompt = """
+        你是基于文档的问答助手，仅使用以下提供的文档片段（Context）回答问题。
+        如果文档中没有相关信息，直接说“根据提供的文档，无法回答该问题”，不要编造内容。
+        回答需简洁、准确，结合历史对话（History）理解上下文，每一次回答要重新审视当前提供的内容，不要只是简单重复历史回答。
+
+        Context:
+        {context_text}
+
+        Current Question: {question}
+
+        Answer:
+        """
+        return system_prompt.format(context_text=context_text, question=question)
+
+    def _generate_answer_once(self, question: str, docs: list, history_messages: list) -> str:
+        """基于给定文档上下文生成一次完整答案（非流式，用于双路对比）。"""
+        final_prompt = self._build_prompt(question, docs)
+        combine_contexts = list(history_messages)
+        combine_contexts.append(HumanMessage(content=final_prompt))
+        response = self.llm.invoke(combine_contexts)
+        return (response.content or "").strip()
+
+    def _pick_better_answer(self, question: str, raw_answer: str, concept_answer: str) -> str:
+        """让LLM在两份候选答案中择优。"""
+        judge_prompt = f"""
+请在候选答案A和B中选择一个更好的最终答案，标准：
+1) 忠实于文档，不编造；
+2) 回答更完整、清晰；
+3) 与问题更相关。
+
+如果A更好，直接输出A的原文；如果B更好，直接输出B的原文。
+不要解释选择理由。
+
+用户问题：{question}
+
+候选答案A：
+{raw_answer}
+
+候选答案B：
+{concept_answer}
+"""
+        try:
+            selected = self.llm.invoke(judge_prompt)
+            return (selected.content or "").strip() or concept_answer or raw_answer
+        except Exception as e:
+            logger.warning(f"答案择优失败，默认返回概念增强答案：{str(e)}")
+            return concept_answer or raw_answer
+
     def get_answer_stream(self, question: str) -> Generator[str, None, None]:
         """
         基于RAG技术生成问题答案，实现流式输出，逐块产生回答内容。
@@ -249,49 +374,44 @@ class RAGService:
         for msg in self.memory.load_memory_variables({})["chat_history"]:
             combine_contexts.append(msg)
 
-        # ------------------------ 3. 文档检索：获取问题相关的事实依据 ------------------------
-        # 创建向量数据库检索器，根据问题检索相关文档片段
-        retriever = self.vectordb.as_retriever(search_kwargs={"k": 5})
-        relevant_docs = retriever.invoke(question)
+        # ------------------------ 3. 文档检索：原查询与概念增强查询 ------------------------
+        raw_docs = self._apply_rerank(question, self._retrieve_docs(question))
 
-        # ------------------------ 4. 对检索的相关文档进行重排 ------------------------
-        if self.reranker_model and self.enable_reranker:
-            filters_docs = self.reranker_model.rerank_documents(
-                query=question,
-                documents=relevant_docs,
-                top_n=self.rerank_top_n,
-                score_threshold=self.rerank_score_threshold
-            )
-            if filters_docs:  # 若未重排未筛选到文档,就自动选取前rerank_top_n个检索的相关文档
-                relevant_docs = filters_docs
-                logger.info(f"重排后提取 {len(relevant_docs)} 个相关文本块")
-            else:
-                relevant_docs = relevant_docs[:self.rerank_top_n]
-                logger.info(f"重排后未筛选到文档，提取检索的 {len(relevant_docs)} 个相关文本块")
+        concept_docs = []
+        concepts = []
+        if self.enable_concept_expansion:
+            concepts = self._extract_concepts(question)
+            if concepts:
+                expanded_query = f"{question}\n相关概念：{'、'.join(concepts)}"
+                concept_docs = self._apply_rerank(expanded_query, self._retrieve_docs(expanded_query))
+                logger.info(f"概念抽取：{concepts}")
+
+        # ------------------------ 4. 双路策略：择优 or 合并 ------------------------
+        if self.enable_concept_expansion and self.compare_with_raw_query and concept_docs:
+            try:
+                raw_answer = self._generate_answer_once(question, raw_docs, combine_contexts)
+                concept_answer = self._generate_answer_once(question, concept_docs, combine_contexts)
+                best_answer = self._pick_better_answer(question, raw_answer, concept_answer)
+
+                for i in range(0, len(best_answer), 20):
+                    chunk_text = best_answer[i:i + 20]
+                    yield chunk_text
+                    self.current_stream_answer += chunk_text
+
+                self.memory.save_context(
+                    inputs={"input": question},
+                    outputs={"answer": self.current_stream_answer}
+                )
+                return
+            except Exception as e:
+                logger.warning(f"双路择优生成失败，降级为常规流式：{str(e)}")
+
+        final_docs = raw_docs
+        if concept_docs:
+            final_docs = self._dedup_docs(raw_docs + concept_docs)
 
         # -------------------------- 5. 提示词构建：拼接完整提示词 --------------------------
-        # 提取片段内容，格式化为字符串（便于拼接提示）
-        context_text = "\n\n".join([doc.page_content for doc in relevant_docs])
-
-        # 系统提示词模板：明确LLM角色、回答规则（避免幻觉）和输入结构（Context/History/Question）
-        system_prompt = """
-        你是基于文档的问答助手，仅使用以下提供的文档片段（Context）回答问题。
-        如果文档中没有相关信息，直接说“根据提供的文档，无法回答该问题”，不要编造内容。
-        回答需简洁、准确，结合历史对话（History）理解上下文，每一次回答要重新审视当前提供的内容，不要只是简单重复历史回答。
-
-        Context:
-        {context_text}
-
-        Current Question: {question}
-
-        Answer:
-        """
-        # 使用检索的相关文档片段和用户输入问题格式化提示模板
-        final_prompt = system_prompt.format(
-            context_text=context_text,
-            question=question
-        )
-        # 添加最终提示到上下文中
+        final_prompt = self._build_prompt(question, final_docs)
         combine_contexts.append(HumanMessage(content=final_prompt))
 
         logger.info(f"combine_contexts:{combine_contexts}")
@@ -341,5 +461,3 @@ class RAGService:
         except Exception as e:
             logger.error(f"错误：数据库清空失败：{str(e)}")
             return False
-
-
