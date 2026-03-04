@@ -37,15 +37,16 @@ body {
   background: #F8FAFC;
 }
 
-/* 主色体系（按设计规范统一） */
+/* 主色体系：青绿色（按示意图） */
 :root {
-  --brand: #2563EB;
-  --bg: #F8FAFC;
+  --brand: #0F7773;
+  --brand-soft: #EAF7F6;
+  --bg: #F4FBFA;
   --card: #FFFFFF;
-  --border: #E5E7EB;
-  --text: #111827;
+  --border: #D7ECEA;
+  --text: #0F2C2A;
   --radius: 12px;
-  --shadow: 0 4px 12px rgba(0,0,0,0.05);
+  --shadow: 0 4px 12px rgba(15, 119, 115, 0.08);
 }
 
 /* 页面布局留白 */
@@ -78,7 +79,7 @@ section[data-testid="stSidebar"] {
   margin-bottom: 6px;
 }
 .hero-subtitle {
-  color: #374151;
+  color: #2C5A58;
   font-size: 0.93rem;
   margin-bottom: 0;
 }
@@ -92,7 +93,7 @@ section[data-testid="stSidebar"] {
   margin-bottom: 12px;
 }
 .guide-title {
-  color: #1F2937;
+  color: #174543;
   font-size: 0.92rem;
   font-weight: 700;
   margin-bottom: 8px;
@@ -100,7 +101,7 @@ section[data-testid="stSidebar"] {
 .guide-list {
   margin: 0;
   padding-left: 18px;
-  color: #374151;
+  color: #2F5B59;
   font-size: 0.88rem;
   line-height: 1.55;
 }
@@ -130,18 +131,18 @@ section[data-testid="stSidebar"] > div {
 /* 按钮：主按钮蓝色渐变，圆角 */
 .stButton > button {
   border-radius: 12px !important;
-  border: 1px solid rgba(37, 99, 235, 0.2) !important;
-  background: linear-gradient(180deg, #3B82F6 0%, #2563EB 100%) !important;
+  border: 1px solid rgba(15, 119, 115, 0.28) !important;
+  background: linear-gradient(180deg, #15908A 0%, #0F7773 100%) !important;
   color: white !important;
   font-weight: 600 !important;
-  box-shadow: 0 6px 16px rgba(37, 99, 235, 0.22) !important;
+  box-shadow: 0 6px 16px rgba(15, 119, 115, 0.22) !important;
 }
 .stButton > button:hover { transform: translateY(-1px); }
 
 /* 次按钮（secondary）更干净 */
 .stButton > button[kind="secondary"] {
   background: white !important;
-  color: #0F172A !important;
+  color: #174543 !important;
   border: 1px solid var(--border) !important;
   box-shadow: none !important;
 }
@@ -152,7 +153,7 @@ div[data-testid="stTextArea"] textarea,
 div[data-baseweb="select"] > div,
 div[data-baseweb="input"] > div {
   border-radius: 12px !important;
-  border-color: #D1D5DB !important;
+  border-color: #CFE5E3 !important;
 }
 
 /* 滑块样式 */
@@ -164,9 +165,9 @@ div[data-testid="stSlider"] [role="slider"] {
 
 /* 上传区域：虚线边框 + 居中提示感 */
 div[data-testid="stFileUploaderDropzone"] {
-  border: 1.5px dashed #93C5FD !important;
+  border: 1.5px dashed #8CCFCC !important;
   border-radius: 12px !important;
-  background: #F8FBFF !important;
+  background: #F2FBFA !important;
 }
 
 /* Chat 气泡 */
@@ -179,8 +180,8 @@ div[data-testid="stChatMessage"] {
 }
 
 .user-bubble {
-  background: #EFF6FF;
-  border: 1px solid #BFDBFE;
+  background: var(--brand-soft);
+  border: 1px solid #BFE3E1;
   border-radius: 12px;
   padding: 10px 12px;
 }
