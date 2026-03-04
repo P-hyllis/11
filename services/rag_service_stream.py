@@ -1,5 +1,6 @@
 import logging
 import os
+import re
 import tempfile
 from typing import Dict, Optional, Any, Generator
 
@@ -329,8 +330,8 @@ class RAGService:
 2) 回答更完整、清晰；
 3) 与问题更相关。
 
-如果A更好，直接输出A的原文；如果B更好，直接输出B的原文。
-不要解释选择理由。
+你必须只输出一个字母：A 或 B。
+不要输出其他任何内容。
 
 用户问题：{question}
 
@@ -342,7 +343,19 @@ class RAGService:
 """
         try:
             selected = self.llm.invoke(judge_prompt)
-            return (selected.content or "").strip() or concept_answer or raw_answer
+            selected_text = (selected.content or "").strip().upper()
+            choice_match = re.search(r"\b([AB])\b", selected_text)
+            if choice_match:
+                return raw_answer if choice_match.group(1) == "A" else concept_answer
+
+            # 兼容模型返回“A.”、“答案A”等非严格格式
+            if selected_text.startswith("A"):
+                return raw_answer
+            if selected_text.startswith("B"):
+                return concept_answer
+
+            logger.warning(f"答案择优输出非预期格式，回退概念增强答案：{selected_text}")
+            return concept_answer or raw_answer
         except Exception as e:
             logger.warning(f"答案择优失败，默认返回概念增强答案：{str(e)}")
             return concept_answer or raw_answer
