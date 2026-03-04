@@ -27,42 +27,47 @@ st.set_page_config(
     layout="wide"
 )
 
-# ===== UI 美化：蓝色渐变主题 + 卡片化布局 + 更清晰的信息层级 =====
+# ===== UI 美化：统一蓝色主题 + 聊天气泡 + 控制面板分组 =====
 st.markdown(
     """
 <style>
 /* 全局字体与背景微调 */
 html, body, [class*="css"]  { font-family: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Arial; }
 body {
-  background:
-    radial-gradient(1200px 600px at 20% -20%, rgba(37,99,235,0.10), transparent 60%),
-    radial-gradient(1200px 600px at 120% 0%, rgba(59,130,246,0.10), transparent 60%),
-    #F8FAFF;
+  background: #F8FAFC;
 }
 
-/* 主色：蓝 */
+/* 主色体系（按设计规范统一） */
 :root {
-  --brand: #2563EB;         /* 蓝色主色 */
-  --brand-2: #1D4ED8;
-  --bg-soft: #F3F6FF;
-  --border: rgba(15, 23, 42, 0.12);
-  --shadow: 0 10px 30px rgba(2, 6, 23, 0.08);
-  --radius: 16px;
+  --brand: #2563EB;
+  --bg: #F8FAFC;
+  --card: #FFFFFF;
+  --border: #E5E7EB;
+  --text: #111827;
+  --radius: 12px;
+  --shadow: 0 4px 12px rgba(0,0,0,0.05);
 }
 
-/* 页面顶部留白更舒服 */
-.block-container { padding-top: 1.2rem; padding-bottom: 2rem; }
+/* 页面布局留白 */
+.block-container {
+  padding-top: 1.2rem;
+  padding-bottom: 2rem;
+  padding-left: 24px;
+  padding-right: 24px;
+}
 
-/* Header 更紧凑 */
-h1, h2, h3 { letter-spacing: -0.02em; }
-h1 { font-size: 1.6rem; }
+/* 左侧栏宽度控制 */
+section[data-testid="stSidebar"] {
+  width: 312px !important;
+  min-width: 312px !important;
+}
 
 /* 顶部说明卡片 */
 .hero-card {
-  background: linear-gradient(135deg, rgba(37,99,235,0.12), rgba(29,78,216,0.06));
-  border: 1px solid rgba(37,99,235,0.22);
-  border-radius: calc(var(--radius) + 2px);
-  padding: 16px 18px;
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 16px;
   margin-bottom: 12px;
   box-shadow: var(--shadow);
 }
@@ -73,50 +78,50 @@ h1 { font-size: 1.6rem; }
   margin-bottom: 6px;
 }
 .hero-subtitle {
-  color: #334155;
+  color: #374151;
   font-size: 0.93rem;
   margin-bottom: 10px;
 }
 .chip-row { display: flex; gap: 8px; flex-wrap: wrap; }
 .chip {
   font-size: 0.78rem;
-  color: #1E3A8A;
-  background: rgba(255,255,255,0.72);
-  border: 1px solid rgba(37,99,235,0.25);
+  color: #1D4ED8;
+  background: #EFF6FF;
+  border: 1px solid #BFDBFE;
   border-radius: 999px;
   padding: 4px 10px;
 }
 
 /* 侧边栏整体背景 */
 section[data-testid="stSidebar"] > div {
-  background: linear-gradient(180deg, #FFFFFF 0%, var(--bg-soft) 100%);
+  background: var(--bg);
 }
 
 /* 侧边栏卡片容器：我们用 st.container 包起来时会更明显 */
 .sidebar-card {
-  background: rgba(255,255,255,0.92);
+  background: var(--card);
   border: 1px solid var(--border);
   border-radius: var(--radius);
-  padding: 14px 14px 12px 14px;
-  box-shadow: 0 8px 22px rgba(2, 6, 23, 0.07);
+  padding: 16px;
+  box-shadow: var(--shadow);
   margin-bottom: 12px;
 }
 
 .section-title {
   font-size: 0.92rem;
   font-weight: 700;
-  color: #1E293B;
+  color: var(--text);
   margin-bottom: 8px;
 }
 
-/* 按钮：圆角、蓝色、阴影 */
+/* 按钮：主按钮蓝色渐变，圆角 */
 .stButton > button {
-  border-radius: 14px !important;
-  border: 1px solid rgba(37, 99, 235, 0.25) !important;
-  background: linear-gradient(180deg, var(--brand) 0%, var(--brand-2) 100%) !important;
+  border-radius: 12px !important;
+  border: 1px solid rgba(37, 99, 235, 0.2) !important;
+  background: linear-gradient(180deg, #3B82F6 0%, #2563EB 100%) !important;
   color: white !important;
   font-weight: 600 !important;
-  box-shadow: 0 10px 20px rgba(37, 99, 235, 0.20) !important;
+  box-shadow: 0 6px 16px rgba(37, 99, 235, 0.22) !important;
 }
 .stButton > button:hover { transform: translateY(-1px); }
 
@@ -131,28 +136,47 @@ section[data-testid="stSidebar"] > div {
 /* 输入框、上传框、选择框统一圆角 */
 div[data-testid="stTextInput"] input,
 div[data-testid="stTextArea"] textarea,
-div[data-testid="stFileUploader"] section,
 div[data-baseweb="select"] > div,
 div[data-baseweb="input"] > div {
-  border-radius: 14px !important;
-  border-color: var(--border) !important;
+  border-radius: 12px !important;
+  border-color: #D1D5DB !important;
 }
 
-/* Slider 颜色（部分版本有效） */
-div[data-testid="stSlider"] [role="slider"] { color: var(--brand); }
+/* 滑块样式 */
+div[data-testid="stSlider"] [data-testid="stThumbValue"] { color: var(--brand); }
+div[data-testid="stSlider"] [role="slider"] {
+  background: var(--brand) !important;
+  border-color: var(--brand) !important;
+}
 
-/* Chat 气泡更像 IM */
+/* 上传区域：虚线边框 + 居中提示感 */
+div[data-testid="stFileUploaderDropzone"] {
+  border: 1.5px dashed #93C5FD !important;
+  border-radius: 12px !important;
+  background: #F8FBFF !important;
+}
+
+/* Chat 气泡 */
 div[data-testid="stChatMessage"] {
   border-radius: var(--radius);
-  border: 1px solid rgba(15, 23, 42, 0.08);
-  box-shadow: 0 6px 14px rgba(2, 6, 23, 0.05);
-  padding: 10px 12px;
+  border: 1px solid var(--border);
+  box-shadow: var(--shadow);
+  padding: 10px 14px;
   margin-bottom: 10px;
 }
 
-/* 用户/助手消息颜色微区分 */
-div[data-testid="stChatMessage"][data-testid*="user"] {
-  background: rgba(255,255,255,0.96);
+.user-bubble {
+  background: #EFF6FF;
+  border: 1px solid #BFDBFE;
+  border-radius: 12px;
+  padding: 10px 12px;
+}
+
+.assistant-bubble {
+  background: #FFFFFF;
+  border: 1px solid #E5E7EB;
+  border-radius: 12px;
+  padding: 10px 12px;
 }
 </style>
     """,
@@ -262,7 +286,7 @@ with st.sidebar:
 
     st.markdown('</div>', unsafe_allow_html=True)
 
-    if st.button("应用配置", use_container_width=True, type="primary"):
+    if st.button("🚀 应用配置", use_container_width=True, type="primary"):
         # 更新会话状态
         st.session_state.enable_reranker = enable_reranker
         st.session_state.retrieve_k = retrieve_k
@@ -285,7 +309,7 @@ with st.sidebar:
     st.markdown('<div class="section-title">文档管理</div>', unsafe_allow_html=True)
     # 1. 多文件上传（支持PDF/DOCX/TXT/MD，与RAGService支持的格式一致）
     uploaded_files = st.file_uploader(
-        "上传文档 (PDF/DOCX/txt/md)",
+        "📂 上传课程资料\n支持 PDF / DOCX / TXT / MD\n拖拽文件到此处或点击上传",
         accept_multiple_files=True,
         key=f"file_uploader_{st.session_state.upload_key}"  # 动态生成key
     )
@@ -327,7 +351,10 @@ st.markdown(
 # 1. 展示聊天历史（遍历session_state.history，按角色显示消息）
 for message in st.session_state.history:
     with st.chat_message(message["role"]):
-        st.markdown(message["content"])
+        if message["role"] == "user":
+            st.markdown(f"<div class='user-bubble'>👤 {message['content']}</div>", unsafe_allow_html=True)
+        else:
+            st.markdown(f"<div class='assistant-bubble'>🤖 {message['content']}</div>", unsafe_allow_html=True)
 
 # 2. 处理用户输入
 user_input = st.chat_input("请问有什么可以帮助您？")
@@ -335,7 +362,7 @@ if user_input:
     # 步骤1：将用户消息添加到会话历史
     st.session_state.history.append({"role": "user", "content": user_input})
     with st.chat_message("user"):
-        st.markdown(user_input)
+        st.markdown(f"<div class='user-bubble'>👤 {user_input}</div>", unsafe_allow_html=True)
 
     # 步骤2：调用RAG服务生成流式回答，并显示
     with st.chat_message("assistant"):
