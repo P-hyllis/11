@@ -46,7 +46,21 @@ class RerankerCrossModel:
             self.reranker_model = CrossEncoder(self.model_name_or_path, device=self.device)
             logger.info(f"✅重排模型加载完成 | 设备：{self.device} | 批次大小：{self.batch_size}")
         except Exception as e:
-            raise RuntimeError(f"模型加载失败：{e}\n请检查：1. 模型路径是否正确 2. 网络是否正常（首次下载需联网）")
+            err_text = str(e)
+            is_cuda_oom = "CUDA error: out of memory" in err_text or "cudaErrorMemoryAllocation" in err_text
+
+            # 显存不足时自动降级到CPU，避免直接崩溃
+            if is_cuda_oom and self.device.startswith("cuda"):
+                logger.warning("⚠️ CUDA显存不足，自动降级到CPU加载重排模型")
+                self.device = "cpu"
+                self.reranker_model = CrossEncoder(self.model_name_or_path, device=self.device)
+                logger.info(f"✅重排模型已降级CPU加载完成 | 设备：{self.device} | 批次大小：{self.batch_size}")
+                return
+
+            raise RuntimeError(
+                f"模型加载失败：{e}\n"
+                f"请检查：1. 模型路径是否正确 2. 网络是否正常（首次下载需联网）"
+            )
 
     def rerank_documents(
             self,
